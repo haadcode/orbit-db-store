@@ -525,8 +525,23 @@ class Store {
     return this._opqueue.add(addOperation.bind(this))
   }
 
-  _addOperationBatch (data, batchOperation, lastOperation, onProgressCallback) {
-    throw new Error('Not implemented!')
+  async _addOperationBatch (data, batchOperation, lastOperation, onProgressCallback) {
+
+    if (this._oplog) {
+      const entry = await this._oplog.append(data, this.options.referenceCount)
+      this._recalculateReplicationStatus(this.replicationStatus.progress + 1, entry.clock.time)
+
+      if (lastOperation) {
+        await this._cache.set('_localHeads', [entry])
+        await this._updateIndex()
+      }
+
+      this.events.emit('write', this.address.toString(), entry, this._oplog.heads)
+      if (onProgressCallback) onProgressCallback(entry)
+      return entry.cid
+
+    }
+
   }
 
   _onLoadProgress (hash, entry, progress, total) {
